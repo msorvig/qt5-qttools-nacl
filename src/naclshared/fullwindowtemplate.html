@@ -1,0 +1,30 @@
+<script type="text/javascript" src="check_browser.js"></script>
+<script type="text/javascript" src="qtnaclloader.js"></script>
+
+<script type="text/javascript">
+
+var qtNaClContainer;
+var qtNaClLoader
+
+function Init()
+{
+    console.log("init");
+    qtNaClContainer = document.getElementById("qtNaClContainer");
+    qtNaClLoader = new QtNaClLoader(qtNaClContainer);
+    setSizeFromWindow();
+    qtNaClLoader.loadNexe("APPNAME");
+}
+
+function setSizeFromWindow()
+{
+    qtNaClLoader.setSize(window.innerWidth, window.innerHeight)
+}
+
+window.onload = Init;
+window.onresize = setSizeFromWindow
+
+
+</script>
+
+<div id="qtNaClContainer">  </div>
+

@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/htmltemplates">
+        <file>naclhtmltemplate.html</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>qt.png</file>
+        <file>loader.gif</file>
+        <file>check_browser.js</file>
+        <file>qtnaclloader.js</file>
+        <file>naclnmftemplate.nmf</file>
+    </qresource>
+</RCC>

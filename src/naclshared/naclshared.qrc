@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/">
+        <file>fullwindowtemplate.html</file>
+        <file>check_browser.js</file>
+        <file>qtnaclloader.js</file>
+        <file>naclnmftemplate.nmf</file>
+    </qresource>
+</RCC>
