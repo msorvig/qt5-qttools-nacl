@@ -121,18 +121,28 @@ QByteArray getNexeArch(const QString &nexePath)
     return QByteArray();
 }
 
-void createSupportFilesForNexes(const QString &outPath, const QStringList &nexes)
+void createSupportFilesForNexe(const QString &outPath, const QString &nexe, const QStringList &searchPaths)
 {
    //qDebug() << "createSupportFilesForNexes" << outPath << nexes;
 
-    QString appName = QFileInfo(nexes.at(0)).baseName();
+    QString appName = QFileInfo(nexe).baseName();
     if (appName.contains("-"))
         appName = appName.split("-").at(0);
     LogDebug() << "App name" << appName;
 
     // Create nmf file
-    QByteArray arch = getNexeArch(nexes.at(0));
-    QStringList deps = findDynamicDependencies(nexes.at(0));
+    QByteArray arch = getNexeArch(nexe);
+
+    QStringList deps;
+    QStringList plugins = findPlugins(nexe);
+    QStringList pluginPaths = findBinaries(plugins, searchPaths);
+    QStringList allBinaries;
+    allBinaries.append(nexe);
+    allBinaries += pluginPaths;
+
+    deps = findDynamicDependencies(allBinaries, searchPaths);
+    deps += plugins;
+
     QByteArray nmfFileContents = generateDynamicNmf(appName, arch, deps, "/");
     const QString &nmfFileName = outPath + QLatin1String("/") + appName + QLatin1String(".nmf");
     writeFile(nmfFileName, nmfFileContents);
@@ -195,26 +205,114 @@ bool isDynamicBuild(const QString &nexePath)
     return fileOutput.contains("dynamically linked");
 }
 
-QStringList findDynamicDependencies(const QString &nexePath)
+QString findBinary(const QString &name, const QStringList &searchPaths)
 {
-    QByteArray objdumpOutput = runFromNaclToolhainPath("i686-nacl-objdump", QStringList() << "-x" << nexePath);
-    QList<QByteArray> lines = objdumpOutput.split('\n');
+    foreach (const QString &searchPath, searchPaths) {
+        QString foundFilePath = searchPath + "/" + name;
+        if (QFile::exists(foundFilePath))
+            return foundFilePath;
+    }
+    qDebug() << "Not found" << name;
+    return QString();
+}
 
-    //qDebug() << "objdump" << objdumpOutput.count() << "bytes";
+QStringList findBinaries(const QStringList &names, const QStringList &searchPaths)
+{
+    QStringList binaryPaths;
+    foreach (const QString &name, names) {
+        QString binaryPath = findBinary(name, searchPaths);
+        binaryPaths.append(binaryPath);
+    }
+    return binaryPaths;
+}
 
-    // Find lines like "NEEDED   aLibrary.so"
-    QStringList dynamicLibs;
-    foreach (const QByteArray &line, lines) {
-        if (line.contains("NEEDED")) {
-            QList<QByteArray> parts = line.simplified().split(' ');
-            // qDebug() << "parts" << parts;
-            if (parts.count() == 2) {
-                dynamicLibs.append(parts.at(1));
+QStringList findDynamicDependencies(const QStringList &binaryPaths, const QStringList &searchPaths)
+{
+    QSet<QString> toVisit; // binaries to visit (full paths)
+    QSet<QString> visited; // already visited (names only), also the resulting dependency list
+
+    toVisit = binaryPaths.toSet();
+
+    while (!toVisit.isEmpty()) {
+        QString binaryPath = *toVisit.begin();
+        toVisit.remove(binaryPath);
+
+        //qDebug() << "look at" << binaryPath;
+
+        // Run objdump
+        QByteArray objdumpOutput = runFromNaclToolhainPath("i686-nacl-objdump", QStringList() << "-x" << binaryPath);
+        QList<QByteArray> lines = objdumpOutput.split('\n');
+
+        // Find lines like "NEEDED   aLibrary.so"
+        QStringList dynamicLibs;
+        foreach (const QByteArray &line, lines) {
+            if (line.contains("NEEDED")) {
+                QList<QByteArray> parts = line.simplified().split(' ');
+                if (parts.count() == 2) {
+                    dynamicLibs.append(parts.at(1));
+                }
+            }
+        }
+
+        // "recurse"
+        foreach (const QString &dynamicLib, dynamicLibs) {
+            if (visited.contains(dynamicLib)) // don't search already visited binaries again
+                continue;
+            QString binaryPath = findBinary(dynamicLib, searchPaths);
+            if (!binaryPath.isEmpty()) {
+                toVisit.insert(binaryPath); // new binary, add path to todo list
+                visited.insert(dynamicLib); // Add to results
             }
         }
     }
 
-    return dynamicLibs;
+    QStringList sortedList = visited.toList();
+    qSort(sortedList);
+    return sortedList;
+}
+
+QStringList findDynamicDependencies(const QString &binaryPath, const QStringList &searchPaths)
+{
+    return findDynamicDependencies(QStringList() << binaryPath, searchPaths);
+}
+
+QStringList findPlugins(const QString &nexePath)
+{
+    Q_UNUSED(nexePath);
+
+    QStringList plugins;
+    plugins.append(QStringLiteral("libqtpepper.so")); // # hardcode platform plugin
+    return plugins;
+}
+
+QString findNexeRPath(const QString &nexePath)
+{
+    QByteArray objdumpOutput = runFromNaclToolhainPath("i686-nacl-objdump", QStringList() << "-x" << nexePath);
+    QList<QByteArray> lines = objdumpOutput.split('\n');
+    QString rpath;
+    // Find the RAPTH line
+    foreach (const QByteArray &line, lines) {
+        if (line.contains("RPATH")) {
+            QList<QByteArray> parts = line.simplified().split(' ');
+            // qDebug() << "parts" << parts;
+            if (parts.count() == 2) {
+                rpath =  parts.at(1);
+            }
+        }
+    }
+
+    return rpath;
+
+}
+
+QString findQtLibPath(const QString &nexePath)
+{
+    return findNexeRPath(nexePath);
+}
+
+QString findQtPluginPath(const QString &nexePath)
+{
+    return QDir(findQtLibPath(nexePath) + "/../plugins/platforms").canonicalPath(); // ### platforms only
 }
 
 QStringList findDynamicLibraries(const QStringList &libraryNames, const QStringList &searchPaths)

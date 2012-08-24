@@ -15,7 +15,7 @@ DEFINES += NACL_TOOLCHAIN_PATH=$$CROSS_COMPILE
 
 TEMPLATE = app
 CONFIG  += qt warn_on
-QT =core network
+QT =core network concurrent
 
 build_all:!build_pass {
     CONFIG -= build_all

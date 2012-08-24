@@ -137,11 +137,27 @@ int main(int argc, char **argv)
     LogDebug() << "Arch        :" << getNexeArch(nexePath);
     LogDebug() << "Build Type  :" << (isDynamicBuild(nexePath) ? "Dynamic" : "Static");
     LogDebug() << "";
-    LogDebug() << "Dependencies:" << findDynamicDependencies(nexePath);
-    LogDebug() << "";
     LogDebug() << "NaCl toolchain path :" << naclToolchainPath();
-    QString libPath = naclLibraryPath(getNexeArch(nexePath).contains("64") ? "64" : "32");
-    LogDebug() << "NaCl libs path      :" << libPath;
+    QString naclLibPath = naclLibraryPath(getNexeArch(nexePath).contains("64") ? "64" : "32");
+    LogDebug() << "NaCl lib path       :" << naclLibPath;
+    QString qtLibPath = findQtLibPath(nexePath);
+    LogDebug() << "Qt lib path         :" << qtLibPath;
+    QString qtPluginPath = findQtPluginPath(nexePath);
+    LogDebug() << "Qt plugin path      :" << qtPluginPath;
+
+    QStringList searchPaths = QStringList()
+            << naclLibPath << qtLibPath << qtPluginPath;
+
+    QStringList plugins = findPlugins(nexePath);
+    QStringList pluginPaths = findBinaries(plugins, searchPaths);
+    QStringList allBinaries = pluginPaths;
+    allBinaries.append(nexePath);
+
+    LogDebug() << "";
+    LogDebug() << "Plugins      :" << plugins;
+    LogDebug() << "Plugin paths      :" << pluginPaths;
+    LogDebug() << "";
+    LogDebug() << "Dependencies :" << findDynamicDependencies(allBinaries, searchPaths);
     LogDebug() << "";
 
     QString deployedNexePath;
@@ -151,7 +167,7 @@ int main(int argc, char **argv)
         deployedNexePath = deployNexe(nexePath, outPath);
     }
 
-    createSupportFilesForNexes(outPath, QStringList() << deployedNexePath);
+    createSupportFilesForNexe(outPath, deployedNexePath, searchPaths);
 
     if (strip) {
         stripNexe(deployedNexePath);
@@ -162,7 +178,9 @@ int main(int argc, char **argv)
         LogDebug() << "starting server on localhost:5103";
         Server httpServer(5103);
         httpServer.setRootPath(outPath);
-        httpServer.addSearchPath(libPath);
+        foreach(const QString &searchPath, searchPaths) {
+            httpServer.addSearchPath(searchPath);
+        }
         app.exec();
     }
 

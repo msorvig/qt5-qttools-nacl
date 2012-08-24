@@ -75,6 +75,7 @@ public:
     void setBody(const QByteArray &body);
     void setCookie(const QByteArray &name, const QByteArray &value);
     void setContentType(const QByteArray &contentType);
+    void setContentEncoding(const QByteArray &contentEncoding);
     void seteTag(const QByteArray &eTag);
     void set304Response();
     void setNeverExpires();
@@ -85,6 +86,7 @@ public:
     QByteArray body;
     QByteArray cookie;
     QByteArray contentType;
+    QByteArray contentEncoding;
     QByteArray eTag;
     bool response304;
     bool neverExpires;
@@ -100,11 +102,26 @@ public:
     void setRootPath(const QString &path);
     void addSearchPath(const QString &path);
     QString findCanonicalPath(QString path);
-    void serveResponseFromPath(HttpResponse *request, QString path);
+    void serveResponseFromPath(HttpResponse *request, QString path, const QByteArray &etag);
 private slots:
     void connectionAvailable();
     void dataOnSocket();
 private:
+    class FileCacheEntry {
+    public:
+        QByteArray fileContent;
+        bool isCompressed;
+        QByteArray eTag;
+        uint timeStamp;
+    };
+    QHash<QString, FileCacheEntry> fileCache;
+    QMutex fileCacheMutex;
+    bool isFileCachedAndValid(const QString &filePath);
+    FileCacheEntry getCachedFile(const QString &filePath);
+    void setFileCache(const QString &filePath, const FileCacheEntry &entry);
+    void lockedSetCachedContent(const QString &filePath, const QByteArray &compressed, const QByteArray &expectedETag, const QByteArray newETag);
+    void compressFile(const QString &filePath, const QByteArray &contents, const QByteArray &eTag);
+
     quint16 port;
     QString rootPath;
     QStringList searchPaths;

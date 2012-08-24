@@ -42,6 +42,9 @@
 #include "httpserver.h"
 #include "time.h"
 
+#include "deploynexe.h"
+#include <QtConcurrent>
+
 HttpRequest::HttpRequest()
 {
 }
@@ -104,7 +107,7 @@ void HttpRequest::parseText()
             hostline.chop(2); // remove newline
             m_hostName = hostline;
         } else if (line.startsWith("If-None-Match:")){
-            m_ifNoneMatch = line.mid(18).simplified(); // remove "If-None-Match: vX-", where X is the integer version number
+            m_ifNoneMatch = line.mid(14).simplified(); // remove "If-None-Match:"
         }
     }
 }
@@ -125,6 +128,11 @@ void HttpResponse::setCookie(const QByteArray &name, const QByteArray &value)
 void HttpResponse::setContentType(const QByteArray &contentType)
 {
     this->contentType = contentType;
+}
+
+void HttpResponse::setContentEncoding(const QByteArray &contentEncoding)
+{
+    this->contentEncoding = contentEncoding;
 }
 
 void HttpResponse::seteTag(const QByteArray &eTag)
@@ -167,6 +175,10 @@ QByteArray HttpResponse::toText()
     text += QByteArray("Date: ") + QByteArray(asctime(gmtime(&currentTime))) + QByteArray("")
     + QByteArray("Content-Type: " + contentType + " \r\n")
     + QByteArray("Content-Length: " + QByteArray::number(body.length())  + "\r\n");
+
+    if (!contentEncoding.isEmpty()) {
+        text += QByteArray("content-encoding: " + contentEncoding + "\r\n");
+    }
 
     if (cookie.isEmpty() == false) {
         text+= "Set-Cookie: " + cookie + "\r\n";
@@ -221,8 +233,8 @@ void Server::dataOnSocket()
 {
     QTcpSocket * socket = static_cast<QTcpSocket *>(sender());
 
-    //DEBUG << "";
-    //DEBUG << "request";
+    //qDebug() << "";
+    //qDebug() << "request";
 
     QList<QByteArray> lines;
     while (socket->canReadLine()) {
@@ -230,12 +242,12 @@ void Server::dataOnSocket()
         lines.append(line);
     }
 
-    //DEBUG << lines;
+    //qDebug() << lines;
 
     HttpRequest request(lines);
 
     HttpResponse response;
-    serveResponseFromPath(&response, request.path());
+    serveResponseFromPath(&response, request.path(), request.m_ifNoneMatch);
     QByteArray responseText = response.toText();
     socket->write(responseText);
     socket->close();
@@ -254,18 +266,8 @@ void Server::addSearchPath(const QString &path)
     searchPaths.append(path);
 }
 
-/*
-QString findFileRecursivly(const QString& rootPath, const QString &fileName)
-{
-    QString filePath;
-    QDir rootDir(rootPath);
-    if (rootDir.
 
-
-    return filePath;
-}
-*/
-void Server::serveResponseFromPath(HttpResponse *response, QString path)
+void Server::serveResponseFromPath(HttpResponse *response, QString path, const QByteArray &ifNoneMatch)
 {
     qDebug() << "GET" << path;
 
@@ -276,24 +278,109 @@ void Server::serveResponseFromPath(HttpResponse *response, QString path)
         return;
 
 
-    QByteArray fileContents;
     QString rootFilePath = path;
     rootFilePath.prepend(rootPath);
+    QString foundFilePath;
     extern QByteArray readFile(const QString &filePath);
     if (QFile::exists(rootFilePath)) {
-        fileContents = readFile(rootFilePath);
-        qDebug() << "serve file" << path << fileContents.count() << "bytes";
+        foundFilePath = rootFilePath;
     } else {
-        foreach (const QString &searchPath, searchPaths) {
-            //QString foundFilePath = findFileRecursivly(searchPath, path);
-            QString foundFilePath = searchPath + path;
-            if (!QFile::exists(foundFilePath))
-                continue;
-            fileContents = readFile(foundFilePath);
-            qDebug() << "serve file" << foundFilePath << fileContents.count() << "bytes";
-        }
+        foundFilePath = findBinary(path, searchPaths);
     }
 
-    response->setBody(fileContents);
+    if (foundFilePath.isEmpty()) {
+        qDebug() << "File not found" << path;
+    }
+
+    // Serve file from cache if possible, or read file from disk and cache it. Cache
+    // (in)validation is based on file timestamps. When new file content is read from
+    // disk it is also compressed on a background worker thread. etags are computed
+    // in order to respond with "304 Not Modified" when file contents has not changed.
+    // This allows serving new content directly and old/unchanged content in a
+    // compressed form that the browser can cache.
+
+    QMutexLocker lock(&fileCacheMutex);
+
+    FileCacheEntry entry;
+    if (isFileCachedAndValid(foundFilePath)) {
+        entry = getCachedFile(foundFilePath);
+    } else if (QFile(foundFilePath).exists()) {
+        entry.timeStamp = QFileInfo(foundFilePath).lastModified().toTime_t();
+
+        entry.fileContent = readFile(foundFilePath);
+        entry.isCompressed = false;
+        entry.eTag = QByteArray::number(entry.timeStamp);
+
+        if (QFileInfo(foundFilePath).lastModified().toTime_t() == entry.timeStamp) // add to cache if the content is still valid
+            setFileCache(foundFilePath, entry);
+
+        // Compress on worker thread - will update the cache when done.
+        QtConcurrent::run(this, &Server::compressFile, foundFilePath, entry.fileContent, entry.eTag);
+    }
+
+    qDebug() << "Serve file" << path << entry.fileContent.count() << "bytes";
+
+    if (entry.fileContent.size() == 0 && path != QStringLiteral("/favicon.ico")) {
+        qDebug() << "";
+        qDebug() << "WARNING:" << path << "has 0 bytes";
+        qDebug() << "";
+    }
+
+    if (entry.eTag == ifNoneMatch) {
+        response->set304Response(); // 304 Not Modified
+    } else {
+        response->seteTag(entry.eTag);
+        if (entry.isCompressed)
+            response->setContentEncoding("deflate");
+        response->setBody(entry.fileContent);
+    }
 }
+
+bool Server::isFileCachedAndValid(const QString &filePath)
+{
+    if (!fileCache.contains(filePath))
+        return false;
+
+    return (QFileInfo(filePath).lastModified().toTime_t() == fileCache[filePath].timeStamp);
+}
+
+Server::FileCacheEntry Server::getCachedFile(const QString &filePath)
+{
+    if (!fileCache.contains(filePath))
+        return FileCacheEntry();
+
+    return fileCache[filePath];
+}
+
+void Server::setFileCache(const QString &filePath, const FileCacheEntry &entry)
+{
+    fileCache[filePath] = entry;
+}
+
+void Server::lockedSetCachedContent(const QString &filePath, const QByteArray &fileContent, const QByteArray &expectedETag, const QByteArray newETag)
+{
+    QMutexLocker lock(&fileCacheMutex);
+    if (!isFileCachedAndValid(filePath))
+        return; // outdated
+
+    FileCacheEntry &entry = fileCache[filePath];
+    if (entry.eTag != expectedETag)
+        return; // content has been updated
+    entry.eTag = newETag;
+    entry.fileContent = fileContent;
+    entry.isCompressed = true;
+}
+
+void Server::compressFile(const QString &filePath, const QByteArray &contents, const QByteArray &eTag)
+{
+    if (!isFileCachedAndValid(filePath))
+        return; // outdated
+
+    QByteArray compressed = qCompress(contents);
+    compressed = compressed.right(compressed.size() - 4); // remove qCompress header, leave deflate format
+
+    lockedSetCachedContent(filePath, compressed, eTag, QByteArray::number(qHash(compressed)));
+}
+
+
 
