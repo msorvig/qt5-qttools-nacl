@@ -43,6 +43,7 @@
 #define HTTPSERVER_H
 
 #include <QObject>
+#include <QtCore>
 #include <QtNetwork>
 
 class HttpRequest

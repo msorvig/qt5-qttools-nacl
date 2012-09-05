@@ -318,7 +318,6 @@ void Server::serveResponseFromPath(HttpResponse *response, QString path, const Q
         QtConcurrent::run(this, &Server::compressFile, foundFilePath, entry.fileContent, entry.eTag);
     }
 
-    qDebug() << "Serve file" << path << entry.fileContent.count() << "bytes";
 
     if (entry.fileContent.size() == 0 && path != QStringLiteral("/favicon.ico")) {
         qDebug() << "";
@@ -327,8 +326,10 @@ void Server::serveResponseFromPath(HttpResponse *response, QString path, const Q
     }
 
     if (entry.eTag == ifNoneMatch) {
+        qDebug() << "304 Not Modified" << path << foundFilePath;
         response->set304Response(); // 304 Not Modified
     } else {
+        qDebug() << "200 OK" << path << foundFilePath <<  entry.fileContent.count() << "bytes" << (entry.isCompressed ? "deflate" : "");
         response->seteTag(entry.eTag);
         if (entry.isCompressed)
             response->setContentEncoding("deflate");
