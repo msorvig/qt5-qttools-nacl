@@ -273,9 +273,18 @@ void Server::serveResponseFromPath(HttpResponse *response, QString path, const Q
 
     if (path == QLatin1String("/"))
         path = QLatin1String("/index.html");
+    else {
+        // ### hack remove any path prefix and us the file name.This is done to work
+        // with the generated .nmfs which have the arch prefixed.
+        qDebug() << "path was" << path;
+        if (path.count("/") >= 2)
+            path = "/" + path.split("/").takeLast();
+        qDebug() << "path now" << path;
+    }
 
     if (path.contains(".."))
         return;
+
 
 
     QString rootFilePath = path;

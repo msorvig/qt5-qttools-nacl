@@ -40,8 +40,13 @@
 ****************************************************************************/
 
 #include "deploynexe.h"
+#include "qfunctional.h"
+#include <QtCore/QString>
 
 int logLevel = 4;
+
+QString archx86_32(QStringLiteral("x86-32"));
+QString archx86_64(QStringLiteral("x86-64"));
 
 QByteArray readFile(const QString &filePath)
 {
@@ -65,10 +70,16 @@ QString naclToolchainPath()
     return QString(QByteArrayLiteral(xstr(NACL_TOOLCHAIN_PATH)));
 }
 
-QString naclLibraryPath(const char *bits)
+QString naclLibraryPath(const QString &arch)
 {
-    QString path = naclToolchainPath() + QByteArray("../x86_64-nacl/lib") + QByteArray(bits);
+    QString bits = (arch == archx86_32 ? QStringLiteral("32") : QStringLiteral("64"));
+    QString path = naclToolchainPath() + QByteArray("../x86_64-nacl/lib") + bits;
     return QDir(path).absolutePath();
+}
+
+QStringList naclLibraryPath(QStringList archs)
+{
+    return map<QString, QString>(archs, naclLibraryPath);
 }
 
 QByteArray runFromNaclToolhainPath(const char *binaryName, const QStringList &arguments)
@@ -106,44 +117,21 @@ QStringList findNexes(const QString &path)
     return path + QLatin1String("/") + QDir(path).entryList(QStringList() << "*.nexe");
 }
 
-QByteArray getNexeArch(const QString &nexePath)
+void createSupportFilesForNexes(const QStringList &deployedNexePaths, const QList<Deployables> &deployables, const QStringList &archs, const QString &outPath)
 {
-    QProcess p;
-    p.start(QLatin1String("/usr/bin/file"), QStringList() << nexePath);
-    p.waitForFinished();
-    QByteArray fileOutput = p.readAll();
-    if (fileOutput.contains("x86-64"))
-        return QByteArray("x86-64");
-    if (fileOutput.contains("80386"))
-        return QByteArray("x86-32");
-    LogError() << "Unnsupported nexe architechtre" << fileOutput;
-    exit(1);
-    return QByteArray();
-}
+    //qDebug() << "createSupportFilesForNexes" << outPath << nexes;
 
-void createSupportFilesForNexe(const QString &outPath, const QString &nexe, const QStringList &searchPaths)
-{
-   //qDebug() << "createSupportFilesForNexes" << outPath << nexes;
+    // Create support files for multiple archs of the same nexe.
 
-    QString appName = QFileInfo(nexe).baseName();
+    QString appName = QFileInfo(deployedNexePaths.at(0)).baseName();
     if (appName.contains("-"))
         appName = appName.split("-").at(0);
     LogDebug() << "App name" << appName;
 
+    QStringList deplyableNames = deployables.at(0).pluginNames + deployables.at(0).dynamicLibraries;
+
     // Create nmf file
-    QByteArray arch = getNexeArch(nexe);
-
-    QStringList deps;
-    QStringList plugins = findPlugins(nexe);
-    QStringList pluginPaths = findBinaries(plugins, searchPaths);
-    QStringList allBinaries;
-    allBinaries.append(nexe);
-    allBinaries += pluginPaths;
-
-    deps = findDynamicDependencies(allBinaries, searchPaths);
-    deps += plugins;
-
-    QByteArray nmfFileContents = generateDynamicNmf(appName, arch, deps, "/");
+    QByteArray nmfFileContents = generateDynamicNmf(appName, archs, deplyableNames);
     const QString &nmfFileName = outPath + QLatin1String("/") + appName + QLatin1String(".nmf");
     writeFile(nmfFileName, nmfFileContents);
     LogDebug() << "Created file" << nmfFileName;
@@ -165,24 +153,23 @@ void createSupportFilesForNexe(const QString &outPath, const QString &nexe, cons
 QString deployNexe(const QString &nexePath, const QString &outPath)
 {
     QString appName = QFileInfo(nexePath).baseName();
-    QByteArray arch = getNexeArch(nexePath);
+//    QByteArray arch = getNexeArch(nexePath);
+//    QString nexeOutPath = outPath + QLatin1Char('/') + appName + QLatin1Char('-') + arch + QLatin1String(".nexe");
 
-    QString nexeOutPath = outPath + QLatin1Char('/') + appName + QLatin1Char('-') + arch + QLatin1String(".nexe");
+    QString nexeOutPath = outPath + QLatin1Char('/') + appName + QLatin1String(".nexe");
 
     LogDebug() << "Copying nexe to" << nexeOutPath;
     QFile::copy(nexePath, nexeOutPath);
+    stripFile(nexeOutPath);
     return nexeOutPath;
 }
 
-void stripNexe(const QString &nexePath)
+void stripFile(const QString &filePath)
 {
-    LogDebug() << "Stripping nexe" << nexePath;
-    QProcess p;
-    p.start(QLatin1String("i686-nacl-strip"), QStringList() << nexePath);
-    p.waitForFinished();
+    runFromNaclToolhainPath("i686-nacl-strip", QStringList() << filePath);
 }
 
-QByteArray findNexeArch(const QString &nexePath)
+QString findNexeArch(const QString &nexePath)
 {
     QProcess p;
     p.start(QLatin1String("/usr/bin/file"), QStringList() << nexePath);
@@ -190,11 +177,15 @@ QByteArray findNexeArch(const QString &nexePath)
     QByteArray fileOutput = p.readAll();
 
     if (fileOutput.contains("x86-64"))
-        return "x86-64";
+        return archx86_64;
     else
-        return "x86-32";
+        return archx86_32;
 }
 
+QStringList findNexeArch(const QStringList &nexePaths)
+{
+    return map<QString, QString>(nexePaths, findNexeArch);
+}
 
 bool isDynamicBuild(const QString &nexePath)
 {
@@ -202,7 +193,23 @@ bool isDynamicBuild(const QString &nexePath)
     p.start(QLatin1String("/usr/bin/file"), QStringList() << nexePath);
     p.waitForFinished();
     QByteArray fileOutput = p.readAll();
-    return fileOutput.contains("dynamically linked");
+    return fileOutput.contains("uses shared libs");
+}
+
+QList<bool> isDynamicBuild(const QStringList &nexePaths)
+{
+    return map<bool, QString>(nexePaths, isDynamicBuild);
+}
+
+QString buildType(const bool &isDynamic)
+{
+    return isDynamic ? "Dynamic" : "Static";
+}
+
+QStringList getNexeBuildTypes(const QStringList &nexePaths)
+{
+    QList<bool> foo = isDynamicBuild(nexePaths);
+    return map<QString, bool>(foo, buildType);
 }
 
 QString findBinary(const QString &name, const QStringList &searchPaths)
@@ -310,9 +317,19 @@ QString findQtLibPath(const QString &nexePath)
     return findNexeRPath(nexePath);
 }
 
+QStringList findQtLibPath(const QStringList &nexePaths)
+{
+    return map<QString, QString>(nexePaths, findQtLibPath);
+}
+
 QString findQtPluginPath(const QString &nexePath)
 {
     return QDir(findQtLibPath(nexePath) + "/../plugins/platforms").canonicalPath(); // ### platforms only
+}
+
+QStringList findQtPluginPath(const QStringList &nexePaths)
+{
+    return map<QString, QString>(nexePaths, findQtPluginPath);
 }
 
 QStringList findDynamicLibraries(const QStringList &libraryNames, const QStringList &searchPaths)
@@ -330,17 +347,41 @@ QStringList findDynamicLibraries(const QStringList &libraryNames, const QStringL
     return resolvedDynamicLibraries;
 }
 
-void deployDynamicLibraries(const QString &qtLibPath, const QStringList &libraryPaths)
+Deployables getDeployables(const QString &nexePath, const QString &naclLibPath, const QString &qtLibPath, const QString &qtPluginPath)
 {
-    foreach (const QString &libraryPath ,libraryPaths) {
-        QString targetPath = qtLibPath + "/" + QFileInfo(libraryPath).fileName();
-        if (QFileInfo(targetPath).exists()) {
-            qDebug() << "skip" << targetPath;
-            continue;
-        }
-        qDebug() << "copy" << libraryPath << "to" << targetPath;
-        QFile::copy(libraryPath, targetPath);
+    Deployables deployables;
 
+    QStringList searchPaths = QStringList() << naclLibPath << qtLibPath << qtPluginPath;
+    deployables.nexePath = nexePath;
+    deployables.pluginNames = findPlugins(nexePath);
+    deployables.pluginPaths = findBinaries(deployables.pluginNames, searchPaths);
+    QStringList rootBinaries = deployables.pluginPaths;
+    rootBinaries.append(nexePath);
+    rootBinaries.append(deployables.pluginPaths);
+    rootBinaries.append(findBinary(QStringLiteral("runnable-ld.so"), searchPaths));
+
+    deployables.dynamicLibraries = findDynamicDependencies(rootBinaries, searchPaths);
+    deployables.dynamicLibraryPaths = findBinaries(deployables.dynamicLibraries, searchPaths);
+
+    return deployables;
+}
+
+QList<Deployables> getDeployables(const QStringList &nexePaths, const QStringList &naclLibPaths, const QStringList &qtLibPaths, const QStringList &qtPluginPaths)
+{
+    return map<Deployables>(nexePaths, naclLibPaths, qtLibPaths, qtPluginPaths, getDeployables);
+}
+
+void deployBinaries(const QStringList &binaries, const QString &outPath)
+{
+   foreach (const QString &binaryPath, binaries) {
+        QString targetPath = outPath + "/" + QFileInfo(binaryPath).fileName();
+        if (QFileInfo(targetPath).exists()) {
+            //qDebug() << "skip" << targetPath;
+            //continue;
+        }
+        qDebug() << "copy" << binaryPath << "to" << targetPath;
+        QFile::copy(binaryPath, targetPath);
+        stripFile(targetPath);
     }
 }
 
@@ -367,7 +408,7 @@ void deployDynamicLibraries(const QString &qtLibPath, const QStringList &library
 }
 
 */
-QByteArray generateDynamicNmf(const QString &appName, const QByteArray &arch, const QStringList &libs, const QString &libPath)
+QByteArray generateDynamicNmf(const QString &appName, const QStringList &archs, const QStringList &libs)
 {
     QByteArray nmf;
     // open brace
@@ -378,34 +419,69 @@ QByteArray generateDynamicNmf(const QString &appName, const QByteArray &arch, co
 
     // nexe
     nmf += "    \"main.nexe\": {\n";
-    nmf += "      \"" + arch + "\": {\n";
-    nmf += "         \"url\": \"" + appName.toLatin1() + ".nexe\"\n";
-    nmf += "       }\n";
+
+    foreach (const QString &arch, archs) {
+        nmf += "      \"" + arch + "\": {\n";
+        nmf += "         \"url\": \"" + arch + "/" + appName.toLatin1() + ".nexe\"\n";
+        nmf += "       },\n";
+    }
+        nmf.chop(2); // remove last ",\n"
+        nmf += "\n";
+
     nmf += "    },\n";
 
     //     dynamic libraries
     foreach (const QString &lib, libs) {
         nmf += "    \"" + lib.toLatin1() + "\": {\n";
-        nmf += "      \"" + arch + "\": {\n";
-        nmf += "         \"url\": \"" + libPath.toLatin1() + lib.toLatin1() + "\"\n";
-        nmf += "       }\n";
+        foreach (const QString &arch, archs) {
+            nmf += "      \"" + arch + "\": {\n";
+            nmf += "         \"url\": \"" + arch + "/" + lib.toLatin1() + "\"\n";
+            nmf += "       },\n";
+        }
+            nmf.chop(2); // remove last ",\n"
+            nmf += "\n";
+
         nmf += "    },\n";
     }
-    nmf.chop(2); // remove last ",\n"
-    nmf += "\n";
+        nmf.chop(2); // remove last ",\n"
+        nmf += "\n";
 
     // close "files"
     nmf += "  },\n";
 
     // program - runnable-ld.so
     nmf += "  \"program\": {\n";
-    nmf += "    \"" + arch + "\": {\n";
-    nmf += "       \"url\": \"" + libPath.toLatin1() + "runnable-ld.so\"\n";
-    nmf += "     }\n";
+    foreach (const QString &arch, archs) {
+        nmf += "    \"" + arch + "\": {\n";
+        nmf += "       \"url\": \"" + arch + "/" + "runnable-ld.so\"\n";
+        nmf += "     },\n";
+    }
+        nmf.chop(2); // remove last ",\n"
+        nmf += "\n";
+
     nmf += "  }\n";
 
     // close brace
     nmf += "}\n";
     return nmf;
+}
+
+QString deployNexe(const Deployables &deployables, QString arch, QString outPath)
+{
+    QString archedBinaryPath = outPath + "/" + arch;
+    QDir().mkpath(archedBinaryPath);
+    QString deployedNexePath = deployNexe(deployables.nexePath, archedBinaryPath);
+    deployBinaries(deployables.dynamicLibraryPaths, archedBinaryPath);
+    return deployedNexePath;
+}
+
+void deployNexes(const QList<Deployables> &deployables, QStringList archs, QString &outPath)
+{
+    QStringList deployedNexePaths;
+    for (int i = 0; i < deployables.count(); ++i) {
+        deployedNexePaths.append(deployNexe(deployables.at(i), archs.at(i), outPath));
+    }
+
+    createSupportFilesForNexes(deployedNexePaths, deployables, archs, outPath);
 }
 

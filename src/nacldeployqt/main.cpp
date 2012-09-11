@@ -48,26 +48,46 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
 
     QString nexePath;
+    QStringList nexePaths;
     QString outPath;
-    bool deployToBuildDir = true;
+    int logLevel = 4;
 
-    if (argc > 1) {
-        nexePath = QString::fromLocal8Bit(argv[1]);
-        outPath = QFileInfo(nexePath).absolutePath();
+    for (int i = 1; i < argc; ++i) {
+        QString arg = QString::fromLocal8Bit(argv[i]);
+        qDebug() << "arg" << i << arg;
+        if (arg.endsWith(".nexe")) {
+            nexePaths.append(QFileInfo(arg).absoluteFilePath());
+        } else if (arg.startsWith("-")) {
+            if (arg.startsWith(QByteArray("-verbose"))) {
+                qDebug() << "Argument found:" << arg;
+                int index = arg.indexOf("=");
+                bool ok = false;
+                int number = arg.mid(index+1).toInt(&ok);
+                if (!ok)
+                    qDebug() << "Could not parse verbose level";
+                else
+                    logLevel = number;
+            } else if (arg.startsWith("-")) {
+                qDebug() << "Unknown argument" << arg << "\n";
+                return 0;
+            }
+        } else {
+            outPath = arg;
+        }
     }
 
-    if (argc > 2 && !QString::fromLocal8Bit(argv[2]).startsWith("-")) {
-        outPath = QString::fromLocal8Bit(argv[2]);
-        deployToBuildDir = false;
+    bool inPlaceServe = outPath.isEmpty();
+
+    if (inPlaceServe && nexePaths.count() > 1) {
+        qDebug() << "Error: nacldeployqt can only serve one nexe using the built-in server";
+        qDebug() << "Either specify one nexe or specify an out path";
     }
-    
-    if (argc < 2 || nexePath.startsWith("-")) {
+
+    if (argc < 2) {
         qDebug() << "Usage: nacldeployqt path/to/nexe [path/to/output] [options]";
         qDebug() << "";
         qDebug() << "Options:";
         qDebug() << "   -verbose=<0-3>  : 0 = no output, 1 = error/warning (default), 2 = normal, 3 = debug";
-        qDebug() << "   -strip          : Strip the nexe" ;
-        qDebug() << "   -startserver    : Start a http server after deploying the nexe. Useful for testing" ;
         qDebug() << "";
         qDebug() << "nacldeployqt creates server-ready Qt NaCl applications from a compiled nexe.";
         qDebug() << "";
@@ -75,113 +95,80 @@ int main(int argc, char **argv)
         qDebug() << "loader code. The output can be served as-is from a web server, or be used as a base for";
         qDebug() << "further modifications, for example by replacing the html but keeping the loader code.";
         qDebug() << "";
-        qDebug() << "If the the output directory already contains a nexe nacldeployqt will";
-        qDebug() << "do one of two things:";
-        qDebug() << "1) If the new nexe is of the same CPU architechure the old one will be overwriten";
-        qDebug() << "2) If the new nexe is of a different CPU architechure it will be deployed alongside the old nexe.";
-        qDebug() << "   Both nexes will be renambed and have the architechture appended (wiggly-x86-nexe, wiggly-x86_64.nexe).";
-        qDebug() << "   The .nmf manifest file will be updated to list both nexes.";
 
         return 0;
     }
 
-    if (nexePath.endsWith("/"))
-        nexePath.chop(1);
-    if (outPath.endsWith("/"))
-        outPath.chop(1);
-    
-    if (QDir().exists(nexePath) == false) {
-        qDebug() << "Error: Could not find nexe" << nexePath;
-        return 0;
-    }
 
-    bool staticNexe = false;
-    bool server = false;
-    bool strip = false;
 
-    int logLevel = 4;
-    for (int i = 2; i < argc; ++i) {
-        QByteArray argument = QByteArray(argv[i]);
-        if (argument.startsWith(QByteArray("-verbose"))) {
-            qDebug() << "Argument found:" << argument;
-            int index = argument.indexOf("=");
-            bool ok = false;
-            int number = argument.mid(index+1).toInt(&ok);
-            if (!ok)
-                qDebug() << "Could not parse verbose level";
-            else
-                logLevel = number;
-        } else if (argument.startsWith(QByteArray("-server"))) {
-            server = true;
-        } else if (argument.startsWith(QByteArray("-strip"))) {
-            strip = true;
-        } else if (argument.startsWith("-")) {
-            qDebug() << "Unknown argument" << argument << "\n";
+    foreach (QString nexePath, nexePaths) {
+        if (nexePath.endsWith("/"))
+            nexePath.chop(1);
+
+        if (QDir().exists(nexePath) == false) {
+            qDebug() << "Error: Could not find nexe" << nexePath;
             return 0;
         }
-     }
-
-    if (staticNexe) {
-        qDebug() << "static nexes are not supported";
-        return 0;
     }
+
+    if (outPath.endsWith("/"))
+        outPath.chop(1);
+
+    for (int i = 2; i < argc; ++i) {
+     }
 
     QDir().mkpath(outPath);
     nexePath = QDir(nexePath).canonicalPath();
     outPath = QDir(outPath).canonicalPath();
 
     LogDebug() << "";
-    LogDebug() << "Source file     :" << nexePath;
+    LogDebug() << "Source file(s)     :" << nexePaths;
     LogDebug() << "Destination dir :" << outPath;
     LogDebug() << "";
-    LogDebug() << "Arch        :" << getNexeArch(nexePath);
-    LogDebug() << "Build Type  :" << (isDynamicBuild(nexePath) ? "Dynamic" : "Static");
+    QStringList archs = findNexeArch(nexePaths);
+    LogDebug() << "Arch(s)        :" << archs;
+    QStringList buildTypes = getNexeBuildTypes(nexePaths);
+    LogDebug() << "Build Type(s)  :" << buildTypes;
     LogDebug() << "";
     LogDebug() << "NaCl toolchain path :" << naclToolchainPath();
-    QString naclLibPath = naclLibraryPath(getNexeArch(nexePath).contains("64") ? "64" : "32");
-    LogDebug() << "NaCl lib path       :" << naclLibPath;
-    QString qtLibPath = findQtLibPath(nexePath);
-    LogDebug() << "Qt lib path         :" << qtLibPath;
-    QString qtPluginPath = findQtPluginPath(nexePath);
-    LogDebug() << "Qt plugin path      :" << qtPluginPath;
+    QStringList naclLibPaths = naclLibraryPath(archs);
+    LogDebug() << "NaCl lib path(s)       :" << naclLibPaths;
+    QStringList qtLibPaths = findQtLibPath(nexePaths);
+    LogDebug() << "Qt lib path(s)         :" << qtLibPaths;
+    QStringList qtPluginPaths = findQtPluginPath(nexePaths);
+    LogDebug() << "Qt plugin path(s)      :" << qtPluginPaths;
 
-    QStringList searchPaths = QStringList()
-            << naclLibPath << qtLibPath << qtPluginPath;
 
-    QStringList plugins = findPlugins(nexePath);
-    QStringList pluginPaths = findBinaries(plugins, searchPaths);
-    QStringList allBinaries = pluginPaths;
-    allBinaries.append(nexePath);
+    QList<Deployables> deployables = getDeployables(nexePaths, naclLibPaths, qtLibPaths, qtPluginPaths);
 
-    LogDebug() << "";
-    LogDebug() << "Plugins      :" << plugins;
-    LogDebug() << "Plugin paths      :" << pluginPaths;
-    LogDebug() << "";
-    LogDebug() << "Dependencies :" << findDynamicDependencies(allBinaries, searchPaths);
-    LogDebug() << "";
-
-    QString deployedNexePath;
-    if (deployToBuildDir) {
-        deployedNexePath = nexePath;
-    } else {
-        deployedNexePath = deployNexe(nexePath, outPath);
+    foreach (const Deployables &deployable, deployables) {
+        LogDebug() << "";
+        LogDebug() << "Deployables for nexe" << deployable.nexePath;
+        LogDebug() << "Plugins           :" << deployable.pluginNames;
+        LogDebug() << "Plugin paths      :" << deployable.pluginPaths;
+        LogDebug() << "";
+        LogDebug() << "Dependencies :" << deployable.dynamicLibraries;
+        LogDebug() << "";
+//        LogDebug() << "Dependencies Paths :" << deployable.dynamicLibraryPaths;
+//        LogDebug() << "";
     }
 
-    createSupportFilesForNexe(outPath, deployedNexePath, searchPaths);
+    if (inPlaceServe) {
+        QString deployedNexePath;
+        deployedNexePath = deployables.at(0).nexePath;
+        createSupportFilesForNexes(QStringList() << deployedNexePath, deployables, archs, outPath);
 
-    if (strip) {
-        stripNexe(deployedNexePath);
-    }
-
-    if (server) {
         LogDebug() << "";
         LogDebug() << "starting server on localhost:5103";
         Server httpServer(5103);
         httpServer.setRootPath(outPath);
-        foreach(const QString &searchPath, searchPaths) {
-            httpServer.addSearchPath(searchPath);
-        }
+        httpServer.addSearchPath(naclLibPaths.at(0));
+        httpServer.addSearchPath(qtLibPaths.at(0));
+        httpServer.addSearchPath(qtPluginPaths.at(0));
         app.exec();
+    } else {
+        // Copy binaries for each nexe/arch
+        deployNexes(deployables, archs, outPath);
     }
 
     return 0;

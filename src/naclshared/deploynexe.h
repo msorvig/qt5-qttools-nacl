@@ -51,23 +51,45 @@
 #define LogDebug()      if (logLevel < 3) {} else qDebug() << "Log:"
 
 QStringList findNexes(const QString &path);
-QByteArray getNexeArch(const QString &nexePath);
 QString naclToolchainPath();
-QString naclLibraryPath(const char *bits);
+QString naclLibraryPath(QString arch);
+QStringList naclLibraryPath(QStringList archs);
 bool isDynamicBuild(const QString &nexePath);
+QList<bool> isDynamicBuilds(const QStringList &nexePaths);
+QStringList getNexeBuildTypes(const QStringList &nexePaths);
+
 QString findBinary(const QString &name, const QStringList &searchPaths);
 QStringList findBinaries(const QStringList &names, const QStringList &searchPaths);
 QStringList findDynamicDependencies(const QString &nexePath, const QStringList &searchPaths);
 QStringList findDynamicDependencies(const QStringList &binaryPaths, const QStringList &searchPaths);
 QStringList findPlugins(const QString & nexePath);
 QString findNexeRPath(const QString &nexePath);
+QString findNexeArch(const QString &nexePath);
+QStringList findNexeArch(const QStringList &nexePaths);
 QString findQtLibPath(const QString &nexePath);
+QStringList findQtLibPath(const QStringList &nexePaths);
 QString findQtPluginPath(const QString &nexePath);
-QStringList findDynamicLibraries(const QStringList &libraryNames, const QStringList &searchPaths);
-void deployDynamicLibraries(const QString &qtLibPath, const QStringList &libraryPaths);
-QByteArray generateDynamicNmf(const QString &appName, const QByteArray &arch, const QStringList &libs, const QString &libPath);
-void createSupportFilesForNexe(const QString &outPath, const QString &nexe, const QStringList &searchPaths);
-QString deployNexe(const QString &nexePath, const QString &outPath);
-void stripNexe(const QString &nexePath);
+QStringList findQtPluginPath(const QStringList &nexePaths);
 
+struct Deployables {
+    QString nexeName;
+    QString nexePath;
+    QStringList pluginNames;
+    QStringList pluginPaths;
+    QStringList dynamicLibraries;
+    QStringList dynamicLibraryPaths;
+};
+
+QDebug operator<< (QDebug d, const Deployables &deployables);
+
+Deployables getDeployables(const QString &nexePath, const QString &naclLibPaths, const QString &qtLibPaths, const QString &qtPluginPaths);
+QList<Deployables> getDeployables(const QStringList &nexePath, const QStringList &naclLibPaths, const QStringList &qtLibPaths, const QStringList &qtPluginPaths);
+
+void deployBinaries(const QStringList &binaries, const QString &outPath);
+QByteArray generateDynamicNmf(const QString &appName, const QStringList &archs, const QStringList &libs);
+void createSupportFilesForNexes(const QStringList &deployedNexePaths, const QList<Deployables> &deployables, const QStringList &archs, const QString &outPath);
+QString deployNexe(const QString &nexePath, const QString &outPath);
+void stripFile(const QString &filePath);
+
+void deployNexes(const QList<Deployables> &deployables, QStringList archs, QString &outPath);
 #endif
