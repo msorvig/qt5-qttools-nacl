@@ -144,8 +144,10 @@ void createSupportFilesForNexes(const QStringList &deployedNexePaths, const QLis
     LogDebug() << "Created file" << htmlFileName;
 
     // Copy javascript
+    QFile::remove(QLatin1String("/check_browser.js"));
     QFile::copy(":check_browser.js", outPath +  QLatin1String("/check_browser.js"));
     LogDebug() << "Created file" << outPath +  QLatin1String("/check_browser.js");
+    QFile::remove(QLatin1String("/qtnaclloader.js"));
     QFile::copy(":qtnaclloader.js", outPath +  QLatin1String("/qtnaclloader.js"));
     LogDebug() << "Created file" << outPath +  QLatin1String("/qtnaclloader.js");
 }
