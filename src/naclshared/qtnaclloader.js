@@ -148,12 +148,8 @@ function moduleDidEndLoad() {
     appendToEventLog('lastError: ' + lastError);
 }
 
-// Handle a message coming from the NaCl module. Qt sends
-// messages for creating, resizing, showing and hiding
-// windows. This function responds by creating <embed>
-// nacl tags with appropriate attributes.
 function handleMessage(message_event) {
-    appendToEventLog(message_event.data);
+    eval(message_event.data);
 }
 
 
