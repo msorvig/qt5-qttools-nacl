@@ -88,9 +88,9 @@ void HttpRequest::parseText()
 {
     foreach (const QByteArray &line, m_text) {
        if (line.startsWith("GET")) {
-             m_path = QUrl::fromPercentEncoding(line.mid(4).split(' ').at(0)).toAscii(); // ### assumes well-formed string
+             m_path = QUrl::fromPercentEncoding(line.mid(4).split(' ').at(0)).toLatin1(); // ### assumes well-formed string
        } else if (line.startsWith("POST")) {
-              m_path = QUrl::fromPercentEncoding(line.mid(5).split(' ').at(0)).toAscii(); // ### assumes well-formed string
+              m_path = QUrl::fromPercentEncoding(line.mid(5).split(' ').at(0)).toLatin1(); // ### assumes well-formed string
        } else if (line.startsWith("Cookie:")) {
 //            DEBUG << "cookie line" << line.simplified();
             m_cookies = line.mid(7).simplified(); // remove "Cookie:"

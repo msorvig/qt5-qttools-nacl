@@ -45,6 +45,7 @@ OTHER_FILES = \
     ../naclshared/naclnmftemplate.nmf \
     ../naclshared/check_browser.js \
     ../naclshared/qtnaclloader.js \
+    ../naclshared/manifest.json \
 
 
 target.path=$$PWD/../../../qtbase/bin/ # hackety (QT_INSTALL_BINS is the host Qt bin)

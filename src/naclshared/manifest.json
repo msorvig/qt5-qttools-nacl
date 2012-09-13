@@ -1,0 +1,17 @@
+{
+    "name": "Qt App",
+    "description": "Qt App placeholder description",
+    "version": "0.0.0.1",
+    "manifest_version" : 2,
+    "icons": {
+        "128": "icon_128.png"
+    },
+    "app": {
+        "urls": [
+                 "http://mysubdomain.example.com/"
+                 ],
+        "launch": {
+            "web_url": "http://mysubdomain.example.com/"
+        }
+    }
+}

@@ -169,6 +169,8 @@ int main(int argc, char **argv)
     } else {
         // Copy binaries for each nexe/arch
         deployNexes(deployables, archs, outPath);
+        QString appName = deployables.at(0).nexeName;
+        createChromeWebStoreSupportFiles(appName, outPath);
     }
 
     return 0;

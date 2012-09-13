@@ -92,4 +92,7 @@ QString deployNexe(const QString &nexePath, const QString &outPath);
 void stripFile(const QString &filePath);
 
 void deployNexes(const QList<Deployables> &deployables, QStringList archs, QString &outPath);
+
+void createChromeWebStoreSupportFiles(const QString &appName, const QString &outpPath);
+
 #endif

@@ -58,8 +58,21 @@ QByteArray readFile(const QString &filePath)
 void writeFile(const QString &filePath, const QByteArray &contents)
 {
     QFile f(filePath);
-    f.open(QIODevice::WriteOnly);
+    f.open(QIODevice::WriteOnly | QIODevice::Truncate);
     f.write(contents);
+}
+
+void copyFile(const QString &sourceFile, const QString &destinationFile)
+{
+    writeFile(destinationFile, readFile(sourceFile));
+}
+
+void deployResourceFile(const QString &fileName, const QString &outPath)
+{
+    QDir().mkpath(outPath);
+    QString filePath = outPath + "/" + fileName;
+    copyFile(":/" + fileName, outPath + "/" + fileName);
+    qDebug() << "Created file" << filePath;
 }
 
 #define xstr(s) str(s)
@@ -355,6 +368,7 @@ Deployables getDeployables(const QString &nexePath, const QString &naclLibPath, 
 
     QStringList searchPaths = QStringList() << naclLibPath << qtLibPath << qtPluginPath;
     deployables.nexePath = nexePath;
+    deployables.nexeName = QFileInfo(nexePath).baseName();
     deployables.pluginNames = findPlugins(nexePath);
     deployables.pluginPaths = findBinaries(deployables.pluginNames, searchPaths);
     QStringList rootBinaries = deployables.pluginPaths;
@@ -485,5 +499,36 @@ void deployNexes(const QList<Deployables> &deployables, QStringList archs, QStri
     }
 
     createSupportFilesForNexes(deployedNexePaths, deployables, archs, outPath);
+}
+
+
+void createChromeWebStoreSupportFiles(const QString &appName, const QString &outPath)
+{
+    qDebug() << "";
+    qDebug() << "Creating placeholder Chrome Web Store support files. Replace these";
+    qDebug() << "files with acutal content, for example in a post-processing script.";
+    qDebug() << "";
+
+    // Manifest file
+    deployResourceFile("manifest.json", outPath);
+    // icon
+    deployResourceFile("icon_128.png", outPath);
+
+    // screnshoot1.png
+    //deployResourceFile("screnshoot1.png", outPath + "/images");
+    // promo_small.png
+    //deployResourceFile("promo_small.png", outPath + "/images");
+
+    QString zipFileName = (appName + QStringLiteral(".zip"));
+    qDebug() << "";
+    qDebug() << "To create a zip file for upload you may run:";
+    qDebug() << "/usr/bin/zip -r" << zipFileName << outPath;
+    qDebug() << "";
+
+    /*QStringList arguments = QStringList() << "-r" << zipFileName << outPath;
+    QProcess p;
+    p.start("/usr/bin/zip", arguments);
+    p.waitForFinished();
+*/
 }
 

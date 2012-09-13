@@ -4,5 +4,7 @@
         <file>check_browser.js</file>
         <file>qtnaclloader.js</file>
         <file>naclnmftemplate.nmf</file>
+        <file>manifest.json</file>
+        <file>icon_128.png</file>
     </qresource>
 </RCC>
