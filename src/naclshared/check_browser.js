@@ -125,6 +125,36 @@ browser_version.BrowserChecker.prototype.getBrowserSupportStatus = function() {
 }
 
 /**
+ * Returns a human-readable error string.
+ * @ return {string} The error string.
+ */
+
+browser_version.BrowserChecker.prototype.getBrowserSupportString = function() {
+    // Good states: This is really an error reporting function so we
+    // don't have much sensible to say.
+    if (this.isValidBrowser_)
+        return "OK";
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.NACL_ENABLED)
+        return "Good things are happening!";
+
+    // Handle disasters of various degrees:
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.UNKNOWN)
+        return "Qt Load Error - Unknown error";
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.UNKNOWN_BROWSER)
+        return "Qt Load Error - Browser is not supported. Please use Google Chrome.";
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.CHROME_VERSION_TOO_OLD)
+        return "Qt Load Error - Chrome version is to old. Chrome version " + this.minChromeVersion_ + " is required. You have version " + this.chromeVersion_ +".";
+    // This seems to be a "not found" error, for example on Ubuntu Chromium. Plain "not enabled" bails out earlier
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.NACL_NOT_ENABLED)
+        return "Qt Load Error - The Native Client plugin was not found.";
+    if (this.browserSupportStatus_ ==  browser_version.BrowserChecker.StatusValues.NOT_USING_SERVER)
+        return "Qt Load Error - Serving Native Client from the file system is not allowed. Please try 'python -m SimpleHTTPServer'";
+
+    // Internal script logic error:
+    return "Qt Load failed - Unknown error";;
+}
+
+/**
  * Returns isValidBrowser (true/false) to indicate if the browser supports
  * Native Client.
  * @ return {bool} If this browser has NativeClient and correct version.

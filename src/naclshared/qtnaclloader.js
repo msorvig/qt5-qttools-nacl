@@ -9,14 +9,14 @@ QtNaClLoader = function(container)
     this.windows = {}
 
     // Check browser version and NaCl support (using check_browser.js)
-    this.minimumChromeVersion = 15;
-    var checker = new browser_version.BrowserChecker(
+    this.minimumChromeVersion = 18;
+    this.checker = new browser_version.BrowserChecker(
         this.minimumChromeVersion,  // Minimum Chrome version.
         navigator["appVersion"],
         navigator["plugins"]);
-    checker.checkBrowser();
-    this.isValidBrowser = checker.getIsValidBrowser();
-    this.browserSupportStatus = checker.getBrowserSupportStatus();
+    this.checker.checkBrowser();
+    this.isValidBrowser = this.checker.getIsValidBrowser();
+    this.browserSupportStatus = this.checker.getBrowserSupportStatus();
 
     // Register event handlers
     this.container.addEventListener('loadstart', moduleDidStartLoad, true);
@@ -28,9 +28,19 @@ QtNaClLoader = function(container)
     this.container.addEventListener('message', handleMessage, true);
     this.container.qtNaClLoader = this;
 
+    this.setStatus = qtNaClLoaderSetStatus;
+
     // Assign public member functions (defined below)
     this.loadNexe = qtNaClLoaderLoadNexe;
     this.setSize = qtNaClLoaderResize;
+}
+
+function qtNaClLoaderSetStatus(status)
+{
+    while (this.status.firstChild) {
+        this.status.removeChild(this.status.firstChild);
+    }
+    this.status.appendChild(document.createTextNode(status));
 }
 
 // Loads a native client executable. This function expects
@@ -43,9 +53,9 @@ function qtNaClLoaderLoadNexe(name)
     this.container.appendChild(this.status);
 
     if (!this.isValidBrowser) {
-        status.innerHTML = "Browser version check failed, Chrome version "
-                            + this.minimumChromeVersion +
-                            " or higher is required.";
+        var error = this.checker.getBrowserSupportString();
+        this.setStatus(error);
+        console.log(error);
         return;
     }
     status.innerHTML = "Loading";
@@ -73,7 +83,7 @@ function qtNaClLoaderResize(width, height)
 }
 
 function appendToEventLog(message) {
-    // console.log(message);
+    console.log(message);
 }
 
 // Handler that gets called when the NaCl module starts loading.  This
