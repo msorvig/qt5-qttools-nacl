@@ -117,7 +117,7 @@ function moduleLoadProgress(event) {
         // The total length is not yet known.
         loadPercent = -1.0;
         loadPercentString = 'Computing...';
-        this.qtNaClLoader.status.innerHTML = "Loading " + percentEncode(spinner.charAt(spinnerIndex));
+        this.qtNaClLoader.status.innerHTML = "Loading " + spinner.charAt(spinnerIndex);
         spinnerIndex = (spinnerIndex + 1) %4;
     }
     appendToEventLog('progress: ' + loadPercentString +
