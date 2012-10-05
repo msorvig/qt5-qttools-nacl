@@ -43,6 +43,8 @@
 
 #include <QtCore/QtCore>
 
+bool isServerDeployment;
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -154,6 +156,7 @@ int main(int argc, char **argv)
     }
 
     if (inPlaceServe) {
+        isServerDeployment = true;
         QString deployedNexePath;
         deployedNexePath = deployables.at(0).nexePath;
         createSupportFilesForNexes(QStringList() << deployedNexePath, deployables, archs, outPath);
@@ -167,6 +170,7 @@ int main(int argc, char **argv)
         httpServer.addSearchPath(qtPluginPaths.at(0));
         app.exec();
     } else {
+        isServerDeployment = false;
         // Copy binaries for each nexe/arch
         deployNexes(deployables, archs, outPath);
         QString appName = deployables.at(0).nexeName;

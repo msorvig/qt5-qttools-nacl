@@ -395,6 +395,10 @@ QList<Deployables> getDeployables(const QStringList &nexePaths, const QStringLis
 // "%2B", % is also not good file name character. Use "plus" as a compromise.
 QString encodeFileName(const QString &fileName)
 {
+    extern bool isServerDeployment; // sorry
+    if (isServerDeployment)
+        return fileName; // Don't confuse the http server.
+
     QString ret = fileName;
     ret.replace('+', "plus");
     return ret;
