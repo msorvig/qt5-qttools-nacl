@@ -377,6 +377,8 @@ Deployables getDeployables(const QString &nexePath, const QString &naclLibPath, 
     rootBinaries.append(findBinary(QStringLiteral("runnable-ld.so"), searchPaths));
 
     deployables.dynamicLibraries = findDynamicDependencies(rootBinaries, searchPaths);
+    deployables.dynamicLibraries += QStringLiteral("runnable-ld.so");
+    deployables.dynamicLibraries += findPlugins(nexePath);
     deployables.dynamicLibraryPaths = findBinaries(deployables.dynamicLibraries, searchPaths);
 
     return deployables;
