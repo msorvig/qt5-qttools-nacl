@@ -103,6 +103,9 @@ function moduleDidStartLoad() {
 //         represents a valid length.
 //
 // event The ProgressEvent that triggered this handler.
+
+var spinner = "-\\|/";
+var spinnerIndex = 0;
 function moduleLoadProgress(event) {
     var loadPercent = 0.0;
     var loadPercentString;
@@ -114,7 +117,8 @@ function moduleLoadProgress(event) {
         // The total length is not yet known.
         loadPercent = -1.0;
         loadPercentString = 'Computing...';
-        this.qtNaClLoader.status.innerHTML = "Loading"
+        this.qtNaClLoader.status.innerHTML = "Loading " + percentEncode(spinner.charAt(spinnerIndex));
+        spinnerIndex = (spinnerIndex + 1) %4;
     }
     appendToEventLog('progress: ' + loadPercentString +
                      ' (' + event.loaded + ' of ' + event.total + ' bytes)');
