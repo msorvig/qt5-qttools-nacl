@@ -389,10 +389,24 @@ QList<Deployables> getDeployables(const QStringList &nexePaths, const QStringLis
     return map<Deployables>(nexePaths, naclLibPaths, qtLibPaths, qtPluginPaths, getDeployables);
 }
 
+QString percentEncode(const QString &fileName)
+{
+    QString ret = fileName;
+    ret.replace('+', "%2B"); // or ret.replace('+', "plus")
+    return ret;
+    // TODO what about the others:
+    // !	#	$	&	'	(	)	*	+	,	/	:	;	=	?	@	[	]
+    // %21	%23	%24	%26	%27	%28	%29	%2A	%2B	%2C	%2F	%3A	%3B	%3D	%3F	%40	%5B	%5D
+}
+
 void deployBinaries(const QStringList &binaries, const QString &outPath)
 {
    foreach (const QString &binaryPath, binaries) {
-        QString targetPath = outPath + "/" + QFileInfo(binaryPath).fileName();
+       // In the web world "+" is not a good filename character; CloudFront will for
+       // example not serve files containing it. Replace with "%2B"
+       QString targetName = percentEncode(QFileInfo(binaryPath).fileName());
+       QString targetPath = outPath + "/" + targetName;
+
         if (QFileInfo(targetPath).exists()) {
             //qDebug() << "skip" << targetPath;
             //continue;
@@ -453,7 +467,7 @@ QByteArray generateDynamicNmf(const QString &appName, const QStringList &archs, 
         nmf += "    \"" + lib.toLatin1() + "\": {\n";
         foreach (const QString &arch, archs) {
             nmf += "      \"" + arch + "\": {\n";
-            nmf += "         \"url\": \"" + arch + "/" + lib.toLatin1() + "\"\n";
+            nmf += "         \"url\": \"" + arch + "/" + percentEncode(lib.toLatin1()) + "\"\n";
             nmf += "       },\n";
         }
             nmf.chop(2); // remove last ",\n"
