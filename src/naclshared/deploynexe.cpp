@@ -156,13 +156,9 @@ void createSupportFilesForNexes(const QStringList &deployedNexePaths, const QLis
     writeFile(htmlFileName, hmtlFileContents);
     LogDebug() << "Created file" << htmlFileName;
 
-    // Copy javascript
-    QFile::remove(QLatin1String("/check_browser.js"));
-    QFile::copy(":check_browser.js", outPath +  QLatin1String("/check_browser.js"));
-    LogDebug() << "Created file" << outPath +  QLatin1String("/check_browser.js");
-    QFile::remove(QLatin1String("/qtnaclloader.js"));
-    QFile::copy(":qtnaclloader.js", outPath +  QLatin1String("/qtnaclloader.js"));
-    LogDebug() << "Created file" << outPath +  QLatin1String("/qtnaclloader.js");
+    // Concat javascript to qt.js
+    writeFile("qt.js", readFile(":check_browser.js") + readFile(":qtnaclloader.js"));
+    LogDebug() << "Created file" << outPath +  QLatin1String("/qt.js");
 }
 
 QString deployNexe(const QString &nexePath, const QString &outPath)

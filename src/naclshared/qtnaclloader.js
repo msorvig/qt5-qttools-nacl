@@ -1,3 +1,17 @@
+function main()
+{
+    var qtElements = elements = document.getElementsByClassName("Qt");
+    console.log(qtElements);
+    for (var i = 0; i < qtElements.length; i++)
+    {
+        var qtElement = qtElements[i];
+        var qtLoader = new QtNaClLoader(qtElement);
+        qtLoader.loadNexe(qtElement.getAttribute("id"));
+    }
+}
+
+window.addEventListener("load", main, false);
+
 QtNaClLoader = function(container)
 {
     this.container = container;

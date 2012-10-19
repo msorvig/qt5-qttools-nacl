@@ -1,24 +1,9 @@
 <html>
-<head>
-<script type="text/javascript" src="check_browser.js"></script>
-<script type="text/javascript" src="qtnaclloader.js"></script>
-<script type="text/javascript">
-
-function Init()
-{
-    console.log("init");
-    var qtNaClContainer = document.getElementById("qtNaClContainer");
-    var qtNaClLoader = new QtNaClLoader(qtNaClContainer);
-    qtNaClLoader.loadNexe("APPNAME");
-}
-
-window.onload = Init;
-
-</script>
-<title>Qt</title>
-</head>
-
-<body style="margin-top: 0px;margin-left: 0px;margin-right: 0px;margin-bottom: 0px;">
-<div id="qtNaClContainer" width=100%; hight=100%;></div>
-</body>
+  <head>
+    <script type="text/javascript" src="qt.js"></script>
+    <title>APPNAME</title>
+  </head>
+  <body style="margin: 0px">
+    <div class="Qt" id="APPNAME" width=100% hight=100%></div>
+  </body>
 </html>
