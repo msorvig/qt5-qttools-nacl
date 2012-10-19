@@ -32,7 +32,6 @@ QtNaClLoader = function(container)
 
     // Assign public member functions (defined below)
     this.loadNexe = qtNaClLoaderLoadNexe;
-    this.setSize = qtNaClLoaderResize;
 }
 
 function qtNaClLoaderSetStatus(status)
@@ -62,24 +61,13 @@ function qtNaClLoaderLoadNexe(name)
 
     // Initialize the NaCl embed element.
     this.nacl.setAttribute('id', name);
-    this.nacl.setAttribute('width', this.width);
-    this.nacl.setAttribute('height', this.height)
+    this.nacl.setAttribute('width', "100%");
+    this.nacl.setAttribute('height', "100%");
     this.nacl.setAttribute('src', name + ".nmf");
     this.nacl.setAttribute('type', "application/x-nacl");
     this.container.appendChild(this.nacl);
 
     this.loadStarted = true;
-}
-
-function qtNaClLoaderResize(width, height)
-{
-    if (this.loadStarted) {
-        this.nacl.setAttribute('width', width);
-        this.nacl.setAttribute('height', height)
-    } else {
-        this.width = width;
-        this.height = height;
-    }
 }
 
 function appendToEventLog(message) {
