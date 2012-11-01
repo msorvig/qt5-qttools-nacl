@@ -6,8 +6,15 @@
 #load(device_config) #disabled - gets the host Qt device config
 
 # Manually load qdevice.pri (duplicated from device_config.pri)
+# Works for the standard qt5.git setup, if you have custom paths
+# you might have to edit the line below.
 DEVICE_PRI = $$PWD/../../../qtbase/mkspecs/qdevice.pri
-exists($$DEVICE_PRI):include($$DEVICE_PRI)
+exists($$DEVICE_PRI) {
+    include($$DEVICE_PRI)
+} else {
+    message("qtbase/mkspecs/qdevice.pri ot found. Please edit path in nacldeployqt.pro")
+}
+
 unset(DEVICE_PRI)
 
 # message($$CROSS_COMPILE)
